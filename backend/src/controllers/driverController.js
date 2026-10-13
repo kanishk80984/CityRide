@@ -7,7 +7,18 @@ const walletService = require('../services/walletService');
 const onboardDriver = async (req, res) => {
   let connection;
   try {
-    const { userId, name, vehicle_type_id, driving_licence, registration_number, make, model, color } = req.body;
+    const { 
+      userId, 
+      name, 
+      vehicle_type_id, 
+      driving_licence, 
+      aadhar_number,
+      pan_number,
+      registration_number, 
+      make, 
+      model, 
+      color 
+    } = req.body;
     
     // In the new schema, userId is actually the drivers.id
     if (!userId || !vehicle_type_id || !driving_licence || !registration_number) {
@@ -23,6 +34,9 @@ const onboardDriver = async (req, res) => {
     };
 
     const licence_photo = getFilePath('licence_photo');
+    const aadhar_photo = getFilePath('aadhar_photo');
+    const pan_photo = getFilePath('pan_photo');
+    const driver_photo = getFilePath('driver_photo') || getFilePath('profile_photo');
     const rc_photo = getFilePath('rc_photo');
     const photo_front = getFilePath('photo_front');
     const photo_back = getFilePath('photo_back');
@@ -30,7 +44,7 @@ const onboardDriver = async (req, res) => {
     const photo_right = getFilePath('photo_right');
 
     if (!licence_photo || !rc_photo || !photo_front || !photo_back || !photo_left || !photo_right) {
-      return errorResponse(res, 400, 'All 6 photos must be uploaded');
+      return errorResponse(res, 400, 'All required vehicle and licence photos must be uploaded');
     }
 
     connection = await pool.getConnection();
@@ -42,8 +56,30 @@ const onboardDriver = async (req, res) => {
     if (existingDrivers.length > 0) {
       // Update existing driver
       await connection.execute(
-        'UPDATE drivers SET name = COALESCE(?, name), driving_licence = ?, licence_photo = ?, kyc_status = "PENDING" WHERE id = ?',
-        [name || null, driving_licence, licence_photo, userId]
+        `UPDATE drivers SET 
+          name = COALESCE(?, name), 
+          driving_licence = ?, 
+          licence_photo = ?, 
+          aadhar_number = COALESCE(?, aadhar_number),
+          aadhar_photo = COALESCE(?, aadhar_photo),
+          pan_number = COALESCE(?, pan_number),
+          pan_photo = COALESCE(?, pan_photo),
+          profile_photo = COALESCE(?, profile_photo),
+          profile_image = COALESCE(?, profile_image),
+          kyc_status = "PENDING" 
+         WHERE id = ?`,
+        [
+          name || null, 
+          driving_licence, 
+          licence_photo, 
+          aadhar_number || null,
+          aadhar_photo || null,
+          pan_number || null,
+          pan_photo || null,
+          driver_photo || null,
+          driver_photo || null,
+          userId
+        ]
       );
     } else {
       // If for some reason they bypassed OTP creation

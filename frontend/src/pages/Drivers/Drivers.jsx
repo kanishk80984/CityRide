@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { getApiUrl } from '../../services/apiClient';
-import { Search, Eye } from 'lucide-react';
+import { getApiUrl, getUploadsUrl } from '../../services/apiClient';
+import { Search, Eye, User } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+
+const UPLOADS_URL = getUploadsUrl();
 
 const Drivers = () => {
   const [driversData, setDriversData] = useState([]);
@@ -12,7 +14,9 @@ const Drivers = () => {
   useEffect(() => {
     const fetchDrivers = async () => {
       try {
-        const response = await fetch(`${getApiUrl()}/admin/drivers`, { headers: { Authorization: `Bearer ${localStorage.getItem('adminToken')}` }, headers: { Authorization: `Bearer ${localStorage.getItem('adminToken')}` } });
+        const response = await fetch(`${getApiUrl()}/admin/drivers`, { 
+          headers: { Authorization: `Bearer ${localStorage.getItem('adminToken')}` } 
+        });
         const data = await response.json();
         if (data.success) {
           setDriversData(data.data);
@@ -23,9 +27,15 @@ const Drivers = () => {
         setLoading(false);
       }
     };
-    
     fetchDrivers();
   }, []);
+
+  const getImageUrl = (filename) => {
+    if (!filename) return null;
+    if (filename.startsWith('http://') || filename.startsWith('https://')) return filename;
+    const clean = filename.startsWith('/uploads/') ? filename.replace('/uploads/', '') : filename.replace(/^\/+/, '');
+    return `${UPLOADS_URL}/${clean}`;
+  };
 
   return (
     <div className="drivers-container">
@@ -69,36 +79,63 @@ const Drivers = () => {
         <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
           <thead style={{ backgroundColor: 'var(--surface-hover)', borderBottom: '1px solid var(--border)' }}>
             <tr>
-              <th style={{ padding: '1rem', fontWeight: 500, color: 'var(--text-muted)' }}>Name</th>
+              <th style={{ padding: '1rem', fontWeight: 500, color: 'var(--text-muted)' }}>Driver</th>
               <th style={{ padding: '1rem', fontWeight: 500, color: 'var(--text-muted)' }}>Phone</th>
-              <th style={{ padding: '1rem', fontWeight: 500, color: 'var(--text-muted)' }}>Vehicle Type</th>
-              <th style={{ padding: '1rem', fontWeight: 500, color: 'var(--text-muted)' }}>License Plate</th>
+              <th style={{ padding: '1rem', fontWeight: 500, color: 'var(--text-muted)' }}>ID & KYC</th>
+              <th style={{ padding: '1rem', fontWeight: 500, color: 'var(--text-muted)' }}>Vehicle</th>
               <th style={{ padding: '1rem', fontWeight: 500, color: 'var(--text-muted)' }}>KYC Status</th>
               <th style={{ padding: '1rem', fontWeight: 500, color: 'var(--text-muted)' }}>Status</th>
-              <th style={{ padding: '1rem', fontWeight: 500, color: 'var(--text-muted)' }}>Rating</th>
               <th style={{ padding: '1rem', fontWeight: 500, color: 'var(--text-muted)' }}>Action</th>
             </tr>
           </thead>
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan="8" style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)' }}>Loading drivers...</td>
+                <td colSpan="7" style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)' }}>Loading drivers...</td>
               </tr>
             ) : driversData.filter(d => activeTab === 'All' || d.kyc_status === activeTab).length === 0 ? (
               <tr>
-                <td colSpan="8" style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)' }}>No drivers found in this category</td>
+                <td colSpan="7" style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)' }}>No drivers found in this category</td>
               </tr>
             ) : (
               driversData
                 .filter(driver => activeTab === 'All' || driver.kyc_status === activeTab)
                 .map((driver) => {
                 const status = driver.is_online ? 'Online' : 'Offline';
+                const avatarUrl = getImageUrl(driver.profile_photo || driver.profile_image);
+
                 return (
                   <tr key={driver.id} style={{ borderBottom: '1px solid var(--border)' }}>
-                    <td style={{ padding: '1rem' }}>{driver.name}</td>
+                    <td style={{ padding: '1rem' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                        {avatarUrl ? (
+                          <img 
+                            src={avatarUrl} 
+                            alt={driver.name} 
+                            style={{ width: '38px', height: '38px', borderRadius: '50%', objectFit: 'cover', border: '1px solid var(--border)' }} 
+                          />
+                        ) : (
+                          <div style={{ width: '38px', height: '38px', borderRadius: '50%', backgroundColor: 'var(--surface-hover)', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid var(--border)' }}>
+                            <User size={20} color="var(--text-muted)" />
+                          </div>
+                        )}
+                        <div>
+                          <div style={{ fontWeight: 600 }}>{driver.name}</div>
+                          <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>ID: #{driver.id}</div>
+                        </div>
+                      </div>
+                    </td>
                     <td style={{ padding: '1rem', color: 'var(--text-muted)' }}>{driver.phone}</td>
-                    <td style={{ padding: '1rem', color: 'var(--text-muted)' }}>{driver.vehicle_type || '-'}</td>
-                    <td style={{ padding: '1rem', fontFamily: 'monospace' }}>{driver.registration_number || '-'}</td>
+                    <td style={{ padding: '1rem' }}>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', fontSize: '0.8rem' }}>
+                        <div><span style={{ color: 'var(--text-muted)' }}>Aadhaar:</span> <strong>{driver.aadhar_number || '-'}</strong></div>
+                        <div><span style={{ color: 'var(--text-muted)' }}>PAN:</span> <strong>{driver.pan_number || '-'}</strong></div>
+                      </div>
+                    </td>
+                    <td style={{ padding: '1rem' }}>
+                      <div>{driver.vehicle_type || '-'}</div>
+                      <div style={{ fontFamily: 'monospace', fontSize: '0.8rem', color: 'var(--text-muted)' }}>{driver.registration_number || '-'}</div>
+                    </td>
                     <td style={{ padding: '1rem' }}>
                       <span style={{ 
                         padding: '0.25rem 0.75rem', 
@@ -123,11 +160,10 @@ const Drivers = () => {
                         {status}
                       </span>
                     </td>
-                    <td style={{ padding: '1rem', color: 'var(--warning)' }}>★ {driver.rating}</td>
                     <td style={{ padding: '1rem' }}>
                       <button 
                         onClick={() => navigate(`/drivers/review/${driver.id}`)}
-                        style={{ background: 'transparent', border: '1px solid var(--primary)', color: 'var(--primary)', padding: '0.25rem 0.75rem', borderRadius: '4px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.25rem' }}
+                        style={{ background: 'transparent', border: '1px solid var(--primary)', color: 'var(--primary)', padding: '0.35rem 0.85rem', borderRadius: '6px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.35rem', fontWeight: 600 }}
                       >
                         <Eye size={16} /> Review
                       </button>

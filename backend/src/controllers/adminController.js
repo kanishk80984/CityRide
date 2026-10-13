@@ -49,6 +49,7 @@ const getAllDrivers = async (req, res) => {
   try {
     const [drivers] = await pool.execute(
       `SELECT d.id, d.name, d.phone, d.kyc_status, d.is_online, d.rating, d.created_at,
+       d.profile_photo, d.profile_image, d.driving_licence, d.aadhar_number, d.pan_number,
        v.registration_number, v.make, v.model, vt.name as vehicle_type 
        FROM drivers d 
        LEFT JOIN vehicles v ON v.driver_id = d.id

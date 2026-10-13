@@ -15,6 +15,10 @@ router.post(
   '/onboard',
   upload.fields([
     { name: 'licence_photo', maxCount: 1 },
+    { name: 'aadhar_photo', maxCount: 1 },
+    { name: 'pan_photo', maxCount: 1 },
+    { name: 'driver_photo', maxCount: 1 },
+    { name: 'profile_photo', maxCount: 1 },
     { name: 'rc_photo', maxCount: 1 },
     { name: 'photo_front', maxCount: 1 },
     { name: 'photo_back', maxCount: 1 },
