@@ -1,5 +1,11 @@
 const express = require('express');
-const { onboardDriver, getDriverStatus, getDriverStats, getDriverWallet, getDriverDetailedEarnings, requestWithdrawal, getDriverWithdrawals, saveBankAccount, getBankAccount, updateProfile, updateParcelStatus, getParcelStatus } = require('../controllers/driverController');
+const { 
+  onboardDriver, getDriverStatus, getDriverStats, getDriverWallet, 
+  getDriverDetailedEarnings, requestWithdrawal, getDriverWithdrawals, 
+  getDriverTransactions, saveBankAccount, getBankAccount, updateProfile, 
+  updateParcelStatus, getParcelStatus, getDriverSubscription, 
+  getSubscriptionPlans, updateRideEntitlements 
+} = require('../controllers/driverController');
 const { protect } = require('../middleware/authMiddleware');
 const { upload } = require('../middleware/uploadMiddleware');
 
@@ -25,6 +31,7 @@ router.get('/detailed-earnings', protect, getDriverDetailedEarnings);
 
 router.post('/withdraw', protect, requestWithdrawal);
 router.get('/withdrawals', protect, getDriverWithdrawals);
+router.get('/transactions', protect, getDriverTransactions);
 
 router.post('/bank-account', protect, saveBankAccount);
 router.get('/bank-account', protect, getBankAccount);
@@ -33,5 +40,10 @@ router.put('/profile', protect, upload.single('profile_image'), updateProfile);
 
 router.put('/parcel-status', protect, updateParcelStatus);
 router.get('/parcel-status', protect, getParcelStatus);
+
+// Subscription and Entitlements routes
+router.get('/subscription', protect, getDriverSubscription);
+router.get('/subscription-plans', protect, getSubscriptionPlans);
+router.put('/ride-entitlements', protect, updateRideEntitlements);
 
 module.exports = router;

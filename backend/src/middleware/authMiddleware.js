@@ -20,6 +20,7 @@ const protect = async (req, res, next) => {
       
       let table = 'users';
       if (role === 'DRIVER') table = 'drivers';
+      if (role === 'OWNER') table = 'owners';
       if (role === 'ADMIN' || role === 'SUPER_ADMIN') {
         table = 'admins';
         // Special case for hardcoded admin token (ID 9999)

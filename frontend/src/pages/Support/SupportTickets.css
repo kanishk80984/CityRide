@@ -1,0 +1,95 @@
+.support-tickets-page {
+  padding: 20px;
+}
+.page-header {
+  margin-bottom: 20px;
+}
+
+.controls-container {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+  gap: 15px;
+}
+
+.search-box input {
+  padding: 10px 15px;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  width: 300px;
+  font-size: 14px;
+}
+.search-box input:focus {
+  outline: none;
+  border-color: #27c293;
+}
+
+.filter-tabs {
+  display: flex;
+  gap: 10px;
+}
+
+.filter-btn {
+  padding: 8px 16px;
+  border: 1px solid #ddd;
+  background-color: #fff;
+  border-radius: 20px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: all 0.2s;
+}
+
+.filter-btn:hover {
+  background-color: #f1f1f1;
+}
+
+.filter-btn.active {
+  background-color: #27c293;
+  color: white;
+  border-color: #27c293;
+}
+
+.type-badge {
+  font-size: 11px;
+  color: #888;
+  margin-left: 5px;
+}
+
+.status-badge {
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 600;
+}
+.status-badge.open {
+  background-color: #E8F5E9;
+  color: #2E7D32;
+}
+.status-badge.closed {
+  background-color: #FFEBEE;
+  color: #C62828;
+}
+
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.data-table th,
+.data-table td {
+  padding: 16px;
+  text-align: left;
+  border-bottom: 1px solid #eee;
+}
+
+.data-table th {
+  font-weight: 600;
+  color: #555;
+  background-color: #fcfcfc;
+}
+
+.data-table tbody tr:hover {
+  background-color: #f9f9f9;
+}

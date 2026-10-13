@@ -21,8 +21,7 @@ const createAd = async (req, res) => {
     let image_url = '';
     
     if (req.file) {
-      const host = `${req.protocol}://${req.get('host')}`;
-      image_url = `${host}/uploads/${req.file.filename}`;
+      image_url = `/uploads/${req.file.filename}`;
     } else {
       return errorResponse(res, 400, 'Image is required');
     }
@@ -59,8 +58,7 @@ const updateAd = async (req, res) => {
         const oldFilePath = path.join(__dirname, '../../../uploads', oldFilename);
         if (fs.existsSync(oldFilePath)) fs.unlinkSync(oldFilePath);
       }
-      const host = `${req.protocol}://${req.get('host')}`;
-      image_url = `${host}/uploads/${req.file.filename}`;
+      image_url = `/uploads/${req.file.filename}`;
     }
 
     await pool.execute(

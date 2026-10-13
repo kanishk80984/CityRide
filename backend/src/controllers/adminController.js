@@ -6,7 +6,7 @@ const bcrypt = require('bcrypt');
 const adminLogin = async (req, res) => {
   try {
     const { email, password } = req.body;
-    if (email === 'admin@eaglefly.com' && password === 'admin123') {
+    if (email === 'admin@cityride.com' && password === 'admin123') {
       const token = jwt.sign({ id: 9999, role: 'ADMIN' }, process.env.JWT_SECRET, { expiresIn: '7d' });
       return successResponse(res, 200, 'Admin login successful', { token });
     }
@@ -36,7 +36,7 @@ const getDashboardStats = async (req, res) => {
 const getAllUsers = async (req, res) => {
   try {
     const [users] = await pool.execute(
-      "SELECT id, name, phone, email, status, created_at FROM users ORDER BY created_at DESC"
+      "SELECT id, name, phone, email, emergency_contact, nominee_details, status, created_at FROM users ORDER BY created_at DESC"
     );
     return successResponse(res, 200, 'Users fetched', users);
   } catch (error) {
@@ -147,10 +147,13 @@ const createDriverByAdmin = async (req, res) => {
       const password_hash = await bcrypt.hash(password || '123456', salt);
       const [driverResult] = await connection.execute(
         'INSERT INTO drivers (name, phone, email, password_hash, driving_licence, licence_photo, kyc_status) VALUES (?, ?, ?, ?, ?, ?, "APPROVED")',
-        [name, phone, email || `driver_${Date.now()}@eagle.com`, password_hash, driving_licence, licence_photo]
+        [name, phone, email || `driver_${Date.now()}@cityride.com`, password_hash, driving_licence, licence_photo]
       );
       driverId = driverResult.insertId;
+      await connection.execute('INSERT IGNORE INTO driver_wallets (driver_id, balance) VALUES (?, 0)', [driverId]);
     }
+
+    await connection.execute('INSERT IGNORE INTO driver_wallets (driver_id, balance) VALUES (?, 0)', [driverId]); // Just in case it existed but had no wallet
 
     await connection.execute('DELETE FROM vehicles WHERE driver_id = ?', [driverId]);
     await connection.execute(
@@ -187,9 +190,7 @@ const addPopularLocation = async (req, res) => {
     let image_url = req.body.image_url;
 
     if (req.file) {
-      // Create full URL to uploaded file
-      const host = req.protocol + '://' + req.get('host');
-      image_url = `${host}/uploads/${req.file.filename}`;
+      image_url = `/uploads/${req.file.filename}`;
     }
 
     const [result] = await pool.query(
@@ -249,8 +250,7 @@ const updatePopularLocation = async (req, res) => {
         if (fs.existsSync(oldFilePath)) fs.unlinkSync(oldFilePath);
       }
 
-      const host = req.protocol + '://' + req.get('host');
-      image_url = `${host}/uploads/${req.file.filename}`;
+      image_url = `/uploads/${req.file.filename}`;
       
       await pool.query(
         'UPDATE popular_locations SET city=?, title=?, address=?, latitude=?, longitude=?, image_url=? WHERE id=?',
@@ -333,6 +333,63 @@ const updateWithdrawalStatus = async (req, res) => {
   }
 };
 
+
+const getUserWithdrawals = async (req, res) => {
+  try {
+    const [rows] = await pool.query(`
+      SELECT w.*, u.name as user_name, u.phone as user_phone
+      FROM user_withdraw_wallet w
+      JOIN users u ON w.user_id = u.id
+      ORDER BY w.created_at DESC
+    `);
+    return successResponse(res, 200, 'User withdrawals fetched successfully', rows);
+  } catch (error) {
+    console.error('Error fetching user withdrawals:', error);
+    return errorResponse(res, 500, 'Failed to fetch user withdrawals');
+  }
+};
+
+const updateUserWithdrawalStatus = async (req, res) => {
+  const connection = await pool.getConnection();
+  try {
+    const { id } = req.params;
+    const { status } = req.body; // 'COMPLETED' or 'FAILED'
+    
+    if (!['COMPLETED', 'FAILED'].includes(status)) {
+      return errorResponse(res, 400, 'Invalid status');
+    }
+
+    await connection.beginTransaction();
+
+    const [wRows] = await connection.query(`SELECT * FROM user_withdraw_wallet WHERE id = ? FOR UPDATE`, [id]);
+    if (wRows.length === 0) {
+      await connection.rollback();
+      return errorResponse(res, 404, 'Withdrawal not found');
+    }
+
+    const withdrawal = wRows[0];
+    if (withdrawal.status !== 'PENDING') {
+      await connection.rollback();
+      return errorResponse(res, 400, 'Withdrawal is already processed');
+    }
+
+    await connection.query(`UPDATE user_withdraw_wallet SET status = ? WHERE id = ?`, [status, id]);
+
+    if (status === 'FAILED') {
+      await connection.query(`UPDATE users SET wallet_balance = wallet_balance + ? WHERE id = ?`, [withdrawal.amount, withdrawal.user_id]);
+    }
+
+    await connection.commit();
+    return successResponse(res, 200, 'Status updated successfully');
+  } catch (error) {
+    await connection.rollback();
+    console.error('Error updating status:', error);
+    return errorResponse(res, 500, 'Failed to update status');
+  } finally {
+    connection.release();
+  }
+};
+
 module.exports = {
   adminLogin,
   getDashboardStats,
@@ -344,9 +401,11 @@ module.exports = {
   createDriverByAdmin,
   getPopularLocationsAdmin,
   addPopularLocation,
-  deletePopularLocation,
   updatePopularLocation,
+  deletePopularLocation,
   getCities,
   getAllWithdrawals,
-  updateWithdrawalStatus
+  updateWithdrawalStatus,
+  getUserWithdrawals,
+  updateUserWithdrawalStatus
 };

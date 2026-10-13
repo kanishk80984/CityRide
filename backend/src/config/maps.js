@@ -1,11 +1,11 @@
 require('dotenv').config();
 
-const GEOAPIFY_API_KEY = process.env.GEOAPIFY_API_KEY;
+const GOOGLE_MAPS_SERVER_API_KEY = process.env.GOOGLE_MAPS_SERVER_API_KEY;
 
-if (!GEOAPIFY_API_KEY) {
-  console.warn('WARNING: GEOAPIFY_API_KEY is missing from environment variables.');
+if (!GOOGLE_MAPS_SERVER_API_KEY) {
+  console.warn('WARNING: GOOGLE_MAPS_SERVER_API_KEY is missing from environment variables.');
 }
 
 module.exports = {
-  GEOAPIFY_API_KEY,
+  GOOGLE_MAPS_SERVER_API_KEY,
 };

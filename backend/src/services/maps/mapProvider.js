@@ -1,6 +1,6 @@
 /**
  * Interface for Map Providers to ensure loose coupling.
- * Implementations (e.g., geoapifyProvider) must adhere to these methods.
+ * Implementations (e.g., googleProvider) must adhere to these methods.
  */
 class MapProvider {
   /**

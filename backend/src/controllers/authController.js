@@ -61,12 +61,18 @@ const verifyOtp = async (req, res) => {
       const salt = await bcrypt.genSalt(10);
       const password_hash = await bcrypt.hash('dummy_pass', salt);
 
+      const userRideOtp = role === 'USER' ? Math.floor(1000 + Math.random() * 9000).toString() : null;
       const [result] = await pool.execute(
-        `INSERT INTO ${table} (name, phone, email, password_hash) VALUES (?, ?, ?, ?)`,
-        [role === 'DRIVER' ? 'New Driver' : 'New User', phone, `${table}_${Date.now()}@eagle.com`, password_hash]
+        `INSERT INTO ${table} (name, phone, email, password_hash${role === 'USER' ? ', ride_otp' : ''}) VALUES (?, ?, ?, ?${role === 'USER' ? ', ?' : ''})`,
+        role === 'USER' 
+          ? ['New User', phone, `${table}_${Date.now()}@cityride.com`, password_hash, userRideOtp]
+          : ['New Driver', phone, `${table}_${Date.now()}@cityride.com`, password_hash]
       );
       
       userId = result.insertId;
+      if (role === 'DRIVER') {
+        await pool.execute('INSERT IGNORE INTO driver_wallets (driver_id, balance) VALUES (?, 0)', [userId]);
+      }
       const [newRows] = await pool.execute(`SELECT * FROM ${table} WHERE id = ?`, [userId]);
       user = newRows[0];
     } else {
@@ -104,11 +110,29 @@ const adminLogin = async (req, res) => {
 
     const [rows] = await pool.execute('SELECT * FROM admins WHERE email = ?', [email]);
     
-    if (rows.length === 0) return errorResponse(res, 401, 'Invalid email or password');
+    if (rows.length === 0) {
+      // Check for Owner
+      const [ownerRows] = await pool.execute('SELECT * FROM owners WHERE owner_code = ?', [email]);
+      if (ownerRows.length > 0) {
+        const owner = ownerRows[0];
+        const isMatch = await bcrypt.compare(password, owner.password_hash);
+        if (!isMatch) return errorResponse(res, 401, 'Invalid ID or password');
+        if (owner.status !== 'ACTIVE') return errorResponse(res, 403, 'Owner account is not active');
+        
+        await pool.execute('UPDATE owners SET last_login_at = NOW() WHERE id = ?', [owner.id]);
+        const token = generateToken(owner.id, 'OWNER');
+        return successResponse(res, 200, 'Owner login successful', {
+          user: { id: owner.id, name: owner.name, owner_code: owner.owner_code, role: 'OWNER' },
+          token
+        });
+      }
+      return errorResponse(res, 401, 'Invalid ID or password');
+    }
+    
     const user = rows[0];
 
     const isMatch = await bcrypt.compare(password, user.password_hash);
-    if (!isMatch) return errorResponse(res, 401, 'Invalid email or password');
+    if (!isMatch) return errorResponse(res, 401, 'Invalid ID or password');
 
     if (user.status !== 'ACTIVE') return errorResponse(res, 403, 'Admin account is not active');
 
@@ -120,8 +144,36 @@ const adminLogin = async (req, res) => {
     });
   } catch (error) {
     console.error(error);
-    return errorResponse(res, 500, 'Server error during admin login');
+    return errorResponse(res, 500, 'Server error during login');
   }
 };
 
-module.exports = { requestOtp, verifyOtp, adminLogin };
+const ownerSetup = async (req, res) => {
+  try {
+    const { owner_code, password } = req.body;
+    
+    // Check if an owner already exists
+    const [existingOwners] = await pool.execute('SELECT id FROM owners LIMIT 1');
+    if (existingOwners.length > 0) {
+      return errorResponse(res, 403, 'You have already created an account, please login');
+    }
+
+    if (!owner_code || !password) return errorResponse(res, 400, 'Owner ID and password are required');
+
+    const cleanCode = owner_code.trim();
+    const [check] = await pool.execute('SELECT id FROM owners WHERE owner_code = ?', [cleanCode]);
+    if (check.length > 0) return errorResponse(res, 400, 'Owner ID already exists');
+
+    const salt = await bcrypt.genSalt(10);
+    const password_hash = await bcrypt.hash(password, salt);
+
+    await pool.execute('INSERT INTO owners (owner_code, password_hash, name) VALUES (?, ?, ?)', [cleanCode, password_hash, 'Owner']);
+
+    return successResponse(res, 201, 'Owner setup successful');
+  } catch(error) {
+    console.error(error);
+    return errorResponse(res, 500, 'Server error during owner setup');
+  }
+}
+
+module.exports = { requestOtp, verifyOtp, adminLogin, ownerSetup };

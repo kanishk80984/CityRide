@@ -1,4 +1,4 @@
-const geoapifyProvider = require('../services/maps/geoapifyProvider');
+const googleProvider = require('../services/maps/googleProvider');
 
 exports.autocomplete = async (req, res) => {
   try {
@@ -7,7 +7,7 @@ exports.autocomplete = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Text is required for autocomplete' });
     }
     
-    const results = await geoapifyProvider.autocomplete(text, lat, lon, limit);
+    const results = await googleProvider.autocomplete(text, lat, lon, limit);
     return res.json({ success: true, results });
   } catch (error) {
     return res.status(500).json({ success: false, message: 'Failed to fetch autocomplete results' });
@@ -21,7 +21,7 @@ exports.reverseGeocode = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Latitude and Longitude are required' });
     }
 
-    const location = await geoapifyProvider.reverseGeocode(lat, lon);
+    const location = await googleProvider.reverseGeocode(lat, lon);
     return res.json({ success: true, location });
   } catch (error) {
     return res.status(500).json({ success: false, message: 'Failed to fetch reverse geocode' });
@@ -35,7 +35,7 @@ exports.route = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Pickup and Drop locations are required' });
     }
 
-    const route = await geoapifyProvider.route(pickup, drop, mode || 'motorcycle');
+    const route = await googleProvider.route(pickup, drop, mode || 'motorcycle');
     return res.json({ success: true, route });
   } catch (error) {
     return res.status(500).json({ success: false, message: 'Failed to calculate route' });

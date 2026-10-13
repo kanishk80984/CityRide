@@ -1,6 +1,8 @@
 const { pool } = require('../config/db');
 const { successResponse, errorResponse } = require('../utils/responseHandler');
 const path = require('path');
+const subscriptionService = require('../services/subscriptionService');
+const walletService = require('../services/walletService');
 
 const onboardDriver = async (req, res) => {
   let connection;
@@ -126,22 +128,8 @@ const getDriverWallet = async (req, res) => {
     const driverId = req.user.id;
 
     // Overall earnings
-    const [balanceResult] = await pool.execute(`
-      SELECT SUM(final_fare) as total 
-      FROM rides 
-      WHERE driver_id = ? AND status = 'COMPLETED'
-    `, [driverId]);
-    
-    // Withdrawals (Pending + Completed)
-    const [withdrawalsResult] = await pool.execute(`
-      SELECT SUM(amount) as total
-      FROM withdrawal_requests
-      WHERE driver_id = ? AND status IN ('Pending', 'Completed')
-    `, [driverId]);
-
-    const totalEarnings = balanceResult[0].total || 0;
-    const totalWithdrawnOrPending = withdrawalsResult[0].total || 0;
-    const currentBalance = totalEarnings - totalWithdrawnOrPending;
+    const [balanceResult] = await pool.execute(`SELECT balance FROM driver_wallets WHERE driver_id = ?`, [driverId]);
+    const currentBalance = balanceResult.length > 0 ? Number(balanceResult[0].balance) : 0;
 
     const [todayResult] = await pool.execute(`
       SELECT SUM(final_fare) as total 
@@ -168,8 +156,123 @@ const getDriverWallet = async (req, res) => {
       thisMonth: monthResult[0].total || 0
     });
   } catch (error) {
-    console.error('Wallet Error:', error);
     return errorResponse(res, 500, 'Failed to fetch wallet stats');
+  }
+};
+
+const getDriverSubscription = async (req, res) => {
+  try {
+    const driverId = req.user.id;
+    const [rows] = await pool.execute(`
+      SELECT ds.*, sp.name as plan_name, sp.code as plan_code, sp.price, sp.validity_days, sp.free_short_rides, sp.free_long_rides, sp.free_one_way_rides, sp.free_two_way_rides,
+             d.short_ride_enabled, d.long_ride_enabled, d.one_way_enabled, d.two_way_enabled
+      FROM driver_subscriptions ds
+      LEFT JOIN subscription_plans sp ON ds.plan_id = sp.id
+      JOIN drivers d ON ds.driver_id = d.id
+      WHERE ds.driver_id = ?
+      ORDER BY ds.id DESC LIMIT 1
+    `, [driverId]);
+
+    if (rows.length === 0) {
+      return successResponse(res, 200, 'No active subscription', { subscription: null });
+    }
+
+    const sub = rows[0];
+    
+    // Check if expired
+    const isExpired = new Date() > new Date(sub.expires_at);
+    let currentStatus = sub.status;
+    if (currentStatus === 'ACTIVE' && isExpired) {
+       currentStatus = 'EXPIRED';
+       // We should ideally update DB here, but for API read we can just return EXPIRED
+       await pool.execute('UPDATE driver_subscriptions SET status = "EXPIRED" WHERE id = ?', [sub.id]);
+    }
+
+    return successResponse(res, 200, 'Subscription fetched', {
+      subscription: {
+        id: sub.id,
+        status: currentStatus,
+        plan_id: sub.plan_id,
+        plan: {
+          name: sub.plan_name || 'Custom Plan',
+          code: sub.plan_code || 'CUSTOM',
+          price: sub.price || 0,
+          validity_days: sub.validity_days || 0,
+          free_short_rides: sub.free_short_rides || sub.free_short_rides_total,
+          free_long_rides: sub.free_long_rides || sub.free_long_rides_total,
+          free_one_way_rides: sub.free_one_way_rides || sub.free_one_way_rides_total || 0,
+          free_two_way_rides: sub.free_two_way_rides || sub.free_two_way_rides_total || 0
+        },
+        plan_name: sub.plan_name || 'Free Trial',
+        price: sub.price || 0,
+        validity_days: sub.validity_days || 0,
+        started_at: sub.starts_at,
+        expires_at: sub.expires_at,
+        short_rides_remaining: sub.free_short_rides_remaining,
+        long_rides_remaining: sub.free_long_rides_remaining,
+        one_way_rides_remaining: sub.free_one_way_rides_remaining || 0,
+        two_way_rides_remaining: sub.free_two_way_rides_remaining || 0
+      },
+      entitlements: {
+        short: {
+          total: sub.free_short_rides_total || 0,
+          remaining: sub.free_short_rides_remaining || 0,
+          enabled: Boolean(sub.short_ride_enabled)
+        },
+        long: {
+          total: sub.free_long_rides_total || 0,
+          remaining: sub.free_long_rides_remaining || 0,
+          enabled: Boolean(sub.long_ride_enabled)
+        },
+        one_way: {
+          total: sub.free_one_way_rides_total || 0,
+          remaining: sub.free_one_way_rides_remaining || 0,
+          enabled: Boolean(sub.one_way_enabled)
+        },
+        two_way: {
+          total: sub.free_two_way_rides_total || 0,
+          remaining: sub.free_two_way_rides_remaining || 0,
+          enabled: Boolean(sub.two_way_enabled)
+        }
+      }
+    });
+  } catch (error) {
+    console.error('Subscription Error:', error);
+    return errorResponse(res, 500, 'Failed to fetch subscription');
+  }
+};
+
+const updateRideEntitlements = async (req, res) => {
+  try {
+    const driverId = req.user.id;
+    const { type, enabled } = req.body;
+    
+    if (!['short', 'long', 'one_way', 'two_way'].includes(type)) {
+      return errorResponse(res, 400, 'Invalid entitlement type');
+    }
+
+    const isEnabled = Boolean(enabled);
+    
+    let dbField = '';
+    if (type === 'short') dbField = 'short_ride_enabled';
+    else if (type === 'long') dbField = 'long_ride_enabled';
+    else if (type === 'one_way') dbField = 'one_way_enabled';
+    else if (type === 'two_way') dbField = 'two_way_enabled';
+    
+    await pool.execute(`UPDATE drivers SET ${dbField} = ? WHERE id = ?`, [isEnabled, driverId]);
+    
+    // Update active socket state safely
+    try {
+      const { updateDriverSocketMeta } = require('../sockets/socketManager');
+      await updateDriverSocketMeta(driverId);
+    } catch (e) {
+      console.error('Socket update error:', e);
+    }
+    
+    return successResponse(res, 200, 'Ride entitlement updated', { type, enabled: isEnabled });
+  } catch (error) {
+    console.error('Update Entitlement Error:', error);
+    return errorResponse(res, 500, 'Failed to update ride entitlement');
   }
 };
 
@@ -343,15 +446,15 @@ const getDriverDetailedEarnings = async (req, res) => {
       
       const totalFare = Math.round(ride.final_fare || 0);
       const estFare = Math.round(ride.estimated_fare || 0);
-      const tipAmount = Math.max(0, totalFare - estFare); 
-      const baseFare = totalFare - tipAmount;
+      const tipAmount = Math.round(ride.tip_amount || 0); 
+      const baseFare = totalFare; // base fare is final fare as tip is tracked separately now
 
       return {
         id: ride.id.toString(),
         time: timeStr,
         type: ride.vehicle_type + ' Ride',
         details: `${distance} km`,
-        total: totalFare,
+        total: totalFare + tipAmount,
         fare: baseFare,
         tip: tipAmount
       };
@@ -540,11 +643,123 @@ const getParcelStatus = async (req, res) => {
   }
 };
 
+const getSubscriptionPlans = async (req, res) => {
+  try {
+    const [plans] = await pool.execute('SELECT id, name, code, price, validity_days, free_short_rides, free_long_rides, free_one_way_rides, free_two_way_rides FROM subscription_plans WHERE status = "ACTIVE" ORDER BY price ASC');
+    return successResponse(res, 200, 'Available subscription plans', { plans });
+  } catch (error) {
+    console.error('Error fetching subscription plans:', error);
+    return errorResponse(res, 500, 'Failed to fetch subscription plans');
+  }
+};
+
+const purchaseSubscription = async (req, res) => {
+  let connection;
+  try {
+    const driverId = req.user.id;
+    const { planId } = req.body;
+
+    if (!planId) return errorResponse(res, 400, 'Plan ID is required');
+
+    connection = await pool.getConnection();
+    await connection.beginTransaction();
+
+    // 1. Verify plan
+    const [plans] = await connection.execute('SELECT price, name FROM subscription_plans WHERE id = ? AND status = "ACTIVE"', [planId]);
+    if (plans.length === 0) {
+      await connection.rollback();
+      return errorResponse(res, 404, 'Active subscription plan not found');
+    }
+    const plan = plans[0];
+    const planPrice = Number(plan.price);
+
+    // 2. Check for existing active subscription
+    const [activeSubs] = await connection.execute('SELECT id FROM driver_subscriptions WHERE driver_id = ? AND status = "ACTIVE"', [driverId]);
+    if (activeSubs.length > 0) {
+      await connection.rollback();
+      return errorResponse(res, 400, 'You already have an active subscription');
+    }
+
+    // 3. Debit wallet
+    await walletService.debitDriverWallet(driverId, planPrice, 'SUBSCRIPTION_PURCHASE', `Purchased subscription: ${plan.name}`, {
+      strict: true,
+      connection: connection
+    });
+
+    // 4. Create subscription
+    const subResult = await subscriptionService.createDriverSubscription(driverId, planId, connection);
+
+    // 5. Update wallet transaction with subscription ID
+    await connection.execute(
+      'UPDATE wallet_transactions SET subscription_id = ? WHERE driver_id = ? AND category = "SUBSCRIPTION_PURCHASE" AND subscription_id IS NULL ORDER BY id DESC LIMIT 1',
+      [subResult.subscriptionId, driverId]
+    );
+
+    await connection.commit();
+    
+    // Update active socket state safely
+    try {
+      const { updateDriverSocketMeta } = require('../sockets/socketManager');
+      await updateDriverSocketMeta(driverId);
+    } catch (e) {
+      console.error('Socket update error:', e);
+    }
+
+    return successResponse(res, 200, 'Subscription purchased successfully', { subscriptionId: subResult.subscriptionId });
+  } catch (error) {
+    if (connection) await connection.rollback();
+    console.error('Error purchasing subscription:', error);
+    if (error.message === 'Insufficient wallet balance.') {
+      return errorResponse(res, 400, 'Insufficient wallet balance');
+    }
+    return errorResponse(res, 500, error.message || 'Failed to purchase subscription');
+  } finally {
+    if (connection) connection.release();
+  }
+};
+
+const getDriverTransactions = async (req, res) => {
+  try {
+    const driverId = req.user.id;
+    const filter = req.query.type; 
+
+    let query = 'SELECT id, type, category, amount, previous_balance, new_balance, notes, DATE_FORMAT(created_at, "%d/%m/%Y %h:%i %p") as date FROM wallet_transactions WHERE driver_id = ?';
+    const queryParams = [driverId];
+
+    if (filter === 'COMMISSION') {
+      query += ' AND category = "RIDE_FARE" AND type = "DEBIT"';
+    } else if (filter === 'RECHARGE') {
+      query += ' AND (category = "RECHARGE" OR category = "TOPUP" OR type = "CREDIT")';
+    }
+
+    query += ' ORDER BY created_at DESC';
+
+    const [rows] = await pool.execute(query, queryParams);
+
+    // Format for frontend
+    const transactions = rows.map(r => ({
+      id: `TXN${driverId}${1000 + r.id}`,
+      amount: r.amount,
+      type: r.type,
+      category: r.category,
+      notes: r.notes,
+      date: r.date
+    }));
+
+    return successResponse(res, 200, 'Transactions fetched successfully', transactions);
+  } catch (error) {
+    console.error('Fetch Transactions Error:', error);
+    return errorResponse(res, 500, 'Failed to fetch transactions');
+  }
+};
+
 module.exports = {
+  getDriverTransactions,
   onboardDriver,
   getDriverStatus,
   getDriverStats,
   getDriverWallet,
+  getDriverSubscription,
   getDriverDetailedEarnings,
   requestWithdrawal,
   getDriverWithdrawals,
@@ -552,5 +767,8 @@ module.exports = {
   getBankAccount,
   updateProfile,
   updateParcelStatus,
-  getParcelStatus
+  getParcelStatus,
+  updateRideEntitlements,
+  getSubscriptionPlans,
+  purchaseSubscription
 };

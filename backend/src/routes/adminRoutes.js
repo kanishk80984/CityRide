@@ -1,15 +1,20 @@
 const express = require('express');
 const router = express.Router();
+const { protect, authorize } = require('../middleware/authMiddleware');
 const { upload } = require('../middleware/uploadMiddleware');
 const { 
   adminLogin, getDashboardStats, getAllUsers, getAllDrivers, 
   getDriverDetails, approveDriver, rejectDriver, createDriverByAdmin,
   getPopularLocationsAdmin, addPopularLocation, deletePopularLocation,
-  updatePopularLocation, getCities, getAllWithdrawals, updateWithdrawalStatus
+  updatePopularLocation, getCities, getAllWithdrawals, updateWithdrawalStatus,
+  getUserWithdrawals, updateUserWithdrawalStatus
 } = require('../controllers/adminController');
 const { getAdminAds, createAd, updateAd, deleteAd } = require('../controllers/adController');
 
 router.post('/login', adminLogin);
+router.use(protect);
+router.use(authorize('ADMIN', 'SUPER_ADMIN'));
+
 router.get('/stats', getDashboardStats);
 router.get('/users', getAllUsers);
 router.get('/drivers', getAllDrivers);
@@ -38,6 +43,9 @@ router.get('/cities', getCities);
 
 router.get('/withdrawals', getAllWithdrawals);
 router.put('/withdrawals/:id', updateWithdrawalStatus);
+
+router.get('/user-withdrawals', getUserWithdrawals);
+router.put('/user-withdrawals/:id', updateUserWithdrawalStatus);
 
 router.get('/ads', getAdminAds);
 router.post('/ads', upload.single('image'), createAd);

@@ -1,144 +1,78 @@
 # ==========================================
-# EAGLE FLY
-# ONLY BACKEND IS UPLOADED TO GITHUB
+# CITYRIDE - COMPLETE PROJECT
 # ==========================================
 
-# Ignore everything by default
-*
+# Node.js dependencies
+node_modules/
+**/node_modules/
 
-# ==========================================
-# ALLOW BACKEND ONLY
-# ==========================================
+# Environment variables and secrets
+.env
+.env.*
+**/.env
+**/.env.*
+!.env.example
+!**/.env.example
 
-!backend/
-!backend/**
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+logs/
 
-# Allow root .gitignore
-!.gitignore
+# Build files
+dist/
+build/
+coverage/
+.nyc_output/
 
-# Allow README if created
-!README.md
+# Cache and temporary files
+.cache/
+.eslintcache
+tmp/
+temp/
 
+# React Native / Android build files
+**/.gradle/
+**/android/app/build/
+**/android/build/
+**/ios/Pods/
 
-# ==========================================
-# BACKEND - ENVIRONMENT / SECRETS
-# ==========================================
+# IDE files
+.vscode/
+.idea/
 
-backend/.env
-backend/.env.*
-!backend/.env.example
+# Operating system files
+.DS_Store
+Thumbs.db
 
+# Database files and backups
+*.sql
+*.sql.gz
+*.db
+*.sqlite
+*.sqlite3
+**/backups/
+**/database-backup/
 
-# ==========================================
-# NODE.JS DEPENDENCIES
-# ==========================================
+# Certificates and private keys
+*.pem
+*.key
+*.crt
 
-backend/node_modules/
+# Service account and credentials
+*service-account*.json
+*credentials*.json
 
+# Railway configuration
+.railway/
+**/.railway/
 
-# ==========================================
-# LOG FILES
-# ==========================================
-
-backend/*.log
-backend/logs/
-backend/npm-debug.log*
-backend/yarn-debug.log*
-backend/pnpm-debug.log*
-
-
-# ==========================================
-# BUILD FILES
-# ==========================================
-
-backend/dist/
-backend/build/
-
-
-# ==========================================
-# CACHE
-# ==========================================
-
-backend/.cache/
-backend/.eslintcache
-
-
-# ==========================================
-# TEST / COVERAGE
-# ==========================================
-
-backend/coverage/
-backend/.nyc_output/
-
-
-# ==========================================
-# TEMPORARY FILES
-# ==========================================
-
-backend/tmp/
-backend/temp/
-
-
-# ==========================================
-# UPLOADED FILES
-# ==========================================
-
-backend/uploads/
-
-
-# ==========================================
-# DATABASE FILES / BACKUPS
-# ==========================================
-
-backend/*.sql
-backend/*.sql.gz
-backend/*.db
-backend/*.sqlite
-backend/*.sqlite3
-backend/backups/
-backend/database-backup/
-
-
-# ==========================================
-# IDE FILES
-# ==========================================
-
-backend/.vscode/
-backend/.idea/
-
-
-# ==========================================
-# OS FILES
-# ==========================================
-
-backend/.DS_Store
-backend/Thumbs.db
-
-
-# ==========================================
-# RAILWAY
-# ==========================================
-
-backend/.railway/
-
-
-# ==========================================
-# CERTIFICATES / KEYS
-# ==========================================
-
-backend/*.pem
-backend/*.key
-backend/*.crt
-
-
-# ==========================================
-# SERVICE ACCOUNT / CREDENTIAL FILES
-# ==========================================
-
-backend/service-account*.json
-backend/*credentials*.json
-
-
-
+# Uploads folder
+# Allow uploads folder and its files
 !uploads/
 !uploads/**
+
+# Keep empty uploads folder in Git
+# Create uploads/.gitkeep if needed
